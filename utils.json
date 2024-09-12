@@ -1,0 +1,17 @@
+{
+    "name": "rest-cli",
+    "deps": {
+        "rest-ObjectError": {
+            "owner": "aramtech",
+            "repo": "rest-ObjectError",
+            "update_policy": "major",
+            "version": "0.2.0"
+        }
+    },
+    "private": false,
+    "public_repo": false,
+    "owner": "aramtech",
+    "hash": "hssDaqism3QiINCVUpEQ4gGB3li8PBk2K_TSQkLnymY",
+    "version": "0.5.3",
+    "description": ""
+}
