@@ -1,0 +1,607 @@
+// database configuration 
+
+generator client {
+    output = "./client"
+    binaryTargets = ["native", "debian-openssl-3.0.x"]
+    provider      = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mysql"
+    url      = "mysql://admin:admin@localhost:3306/your_db_name"
+}
+
+// end--of--db--config
+
+// client 
+enum id_type {
+    STRING
+    INT
+}
+
+enum email_status {
+    sent
+    not_sent
+    pending
+    sending
+}
+
+// basic functioning -- emails
+model emails {
+    email_id        Int           @id @default(autoincrement()) @db.UnsignedInt
+    from            String        @db.VarChar(255)
+    to              String        @db.VarChar(255)
+    cc              String?       @db.Text
+    subject         String?       @db.VarChar(700)
+    email_text      String?       @db.Text
+    template_path   String?       @db.Text
+    email_html_file String?       @db.Text
+    status          email_status? @default(sent)
+
+    @@index([from])
+    @@index([to])
+    @@index([subject])
+    @@index([status])
+}
+
+// basic functioning -- jobs
+
+enum job_status {
+    DONE
+    PENDING
+    FAILED
+}
+
+enum job_handler_type {
+    HANDLER_NAME
+    FUNCTION_STRING
+}
+
+model jobs {
+    job_id          Int              @id @default(autoincrement()) @db.UnsignedInt
+    title           String?          @db.VarChar(500)
+    handler         String           @db.Text
+    handler_type    job_handler_type @default(HANDLER_NAME)
+    argument_json   String?          @db.Text
+    designated_date DateTime         @db.Timestamp(0)
+    cron_schedule   String?          @db.VarChar(255)
+    repeat_count    Int?             @default(-1)
+    status          job_status       @default(PENDING)
+    output          String?          @db.Text
+
+    @@index([title])
+    @@index([handler_type])
+    @@index([designated_date])
+    @@index([cron_schedule])
+    @@index([repeat_count])
+    @@index([status])
+}
+
+// basic functioning -- files
+model files {
+    file_id              Int                   @id @default(autoincrement()) @db.UnsignedInt
+    name                 String                @db.VarChar(255)
+    mimetype             String                @db.VarChar(255)
+    size                 Int                   @db.UnsignedInt
+    path                 String                @db.VarChar(700)
+    comments_attachments comment_attachments[]
+
+    messages_attachments messages[] @relation("message_attachment")
+    messages_images      messages[] @relation("message_image")
+    messages_videos      messages[] @relation("message_video")
+    messages_voices      messages[] @relation("message_voice")
+
+    @@index([name])
+    @@index([mimetype])
+    @@index([path])
+}
+
+// basic functioning -- comments
+model comment_attachments {
+    attachment_id      Int @id @default(autoincrement()) @db.UnsignedInt
+    comment_id         Int @db.UnsignedInt
+    attachment_file_id Int @db.UnsignedInt
+
+    comment comments @relation(fields: [comment_id], references: [comment_id], onDelete: NoAction, onUpdate: NoAction, map: "comment_attachments_ibfk_1")
+    file    files    @relation(fields: [attachment_file_id], references: [file_id], onDelete: NoAction, onUpdate: NoAction, map: "comment_attachments_ibfk_2")
+
+    @@index([comment_id], map: "comment_id")
+}
+
+model comments {
+    comment_id        Int     @id @default(autoincrement()) @db.UnsignedInt
+    comment_text      String? @db.Text
+    comment_source    String  @db.VarChar(255)
+    comment_source_id Int?    @db.UnsignedInt
+    by_user           Int?    @db.UnsignedInt
+    by_username       String? @db.VarChar(255)
+
+
+    commented_by_user users? @relation("comments_by_userTousers", fields: [by_user], references: [user_id], onDelete: SetNull, onUpdate: NoAction, map: "comments_ibfk_1")
+
+    comment_attachments comment_attachments[]
+
+    @@index([by_user], map: "by_user")
+}
+
+// basic functioning -- notifications
+model devices {
+    device_id    Int    @id @default(autoincrement()) @db.UnsignedInt
+    device_token String @db.VarChar(700)
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("user_devices", fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "devices_ibfk_1")
+
+    notification_tokens notification_tokens[]
+
+    @@index([device_token])
+    @@index([user_id], map: "user_id")
+}
+
+model notification_tokens {
+    notification_token_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    token String? @db.VarChar(700)
+
+    device_id Int?     @db.UnsignedInt
+    device    devices? @relation(fields: [device_id], references: [device_id], onDelete: Cascade, onUpdate: NoAction, map: "notification_tokens_ibfk_1")
+
+    @@index([token])
+    @@index([device_id])
+}
+
+model notifications {
+    notification_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    notification_tokens_id String @db.Text
+
+    data_json         String? @db.Text
+    notification_json String? @db.Text
+}
+
+// basic functioning -- logging
+
+model log {
+    log_id   Int     @id @default(autoincrement()) @db.UnsignedInt
+    level    Int     @db.UnsignedInt
+    title    String? @db.VarChar(500)
+    log_text String? @db.Text
+    source   String? @db.VarChar(500)
+
+    log_level log_levels @relation(fields: [level], references: [level_id], onDelete: NoAction, onUpdate: NoAction, map: "log_ibfk_1")
+
+    @@index([level])
+    @@index([title])
+    @@index([level], map: "level")
+}
+
+model log_levels {
+    level_id    Int     @id @default(autoincrement()) @db.UnsignedInt
+    name        String  @db.VarChar(255)
+    description String? @db.Text
+
+    logs log[]
+}
+
+enum messaging_room_type {
+    personal
+    group
+    announcements
+}
+
+model messaging_rooms {
+    room_id Int    @id @default(autoincrement()) @db.UnsignedInt
+    name    String
+
+    members   messaging_rooms_members[] @relation("room_members")
+    room_type messaging_room_type       @default(personal)
+    messages  messages[]                @relation("messages")
+}
+
+enum message_type {
+    text
+    voice_message
+    file_attachment
+    image
+    video
+
+    // calling
+    call_started
+    call_ended
+    voice_call_started
+    voice_call_ended
+    video_call_started
+    video_call_ended
+}
+
+model messages {
+    message_id   Int                  @id @default(autoincrement()) @db.UnsignedInt
+    message_type message_type
+    text         String?              @db.Text
+    reactions    messages_reactions[] @relation("messages_reactions")
+
+    file_id Int?   @db.UnsignedInt
+    file    files? @relation("message_attachment", references: [file_id], fields: [file_id])
+
+    image_id Int?   @db.UnsignedInt
+    image    files? @relation("message_image", references: [file_id], fields: [image_id])
+
+    video_id Int?   @db.UnsignedInt
+    video    files? @relation("message_video", references: [file_id], fields: [video_id])
+
+    voice_id Int?   @db.UnsignedInt
+    voice    files? @relation("message_voice", references: [file_id], fields: [voice_id])
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("message_sender", references: [user_id], fields: [user_id])
+
+    room_id Int?             @db.UnsignedInt
+    room    messaging_rooms? @relation("messages", references: [room_id], fields: [room_id])
+
+    status message_status
+
+    received_by messages_received_by_users[] @relation("messages_received_by_users")
+
+    @@index([file_id])
+    @@index([image_id])
+    @@index([video_id])
+    @@index([voice_id])
+    @@index([user_id])
+    @@index([room_id])
+}
+
+model messages_received_by_users {
+    reaction_id Int     @id @default(autoincrement()) @db.UnsignedInt
+    seen        Boolean @default(false)
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("users_received_messages", references: [user_id], fields: [user_id])
+
+    message_id Int?      @db.UnsignedInt
+    message    messages? @relation("messages_received_by_users", references: [message_id], fields: [message_id])
+
+    @@index([user_id])
+    @@index([message_id])
+}
+
+enum message_status {
+    sent
+    sending
+    failed
+    no_status
+}
+
+model messages_reactions {
+    reaction_id   Int    @id @default(autoincrement()) @db.UnsignedInt
+    reaction_name String
+    user_id       Int?   @db.UnsignedInt
+    user          users? @relation("message_reaction_user", references: [user_id], fields: [user_id])
+
+    message_id Int?      @db.UnsignedInt
+    message    messages? @relation("messages_reactions", references: [message_id], fields: [message_id])
+
+    @@index([user_id])
+    @@index([message_id])
+}
+
+model messaging_rooms_members {
+    member_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    room_id Int?             @db.UnsignedInt
+    room    messaging_rooms? @relation("room_members", references: [room_id], fields: [room_id])
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("room_member_user", references: [user_id], fields: [user_id])
+
+    @@index([room_id])
+    @@index([user_id])
+}
+
+// basic functioning -- user module
+enum users_types {
+    ADMIN
+    OTHER
+    SYSTEM
+    EMPLOYEE
+}
+
+model users {
+    user_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    messages_reactions messages_reactions[] @relation("message_reaction_user")
+
+    last_online  DateTime? @updatedAt
+    last_offline DateTime? @updatedAt
+
+    archived Boolean @default(false)
+    active   Boolean @default(true)
+
+    // identifier
+    full_name String @db.VarChar(500)
+
+    // credential 
+    username String @db.VarChar(255)
+    password String @db.VarChar(255)
+
+    messaging_rooms_membership messaging_rooms_members[] @relation("room_member_user")
+
+    messages          messages[]                   @relation("message_sender")
+    received_messages messages_received_by_users[] @relation("users_received_messages")
+
+    // contacts 
+    unverified_email String? @db.VarChar(255)
+    email            String? @db.VarChar(255)
+
+    unverified_phone String? @db.VarChar(255)
+    phone            String? @db.VarChar(255)
+
+    user_type users_types
+
+    // address  
+    region_id     Int?     @db.UnsignedInt
+    region        regions? @relation("regionTousers_regions", fields: [region_id], references: [region_id], onDelete: NoAction, onUpdate: NoAction)
+    nearest_point String?  @db.Text
+
+    // normal relations 
+    comments  comments[]   @relation("comments_by_userTousers")
+    devices   devices[]    @relation("user_devices")
+    user_logs users_logs[] @relation("user_logs")
+
+    // authorities 
+    user_authorities       users_authorities[] @relation("user_authorities")
+    default_home_page_name String?
+
+    // authorization profile  
+    authorization_profile_id Int?                    @db.UnsignedInt
+    authorization_profile    authorization_profiles? @relation("authorization_profile_users", fields: [authorization_profile_id], references: [profile_id], onDelete: NoAction, onUpdate: NoAction, map: "users_ibfk_4")
+
+    verification_otps       users_verification_otps[]       @relation("user_verification_otp")
+    phone_verification_otps users_phone_verification_otps[] @relation("user_phone_verification_otp")
+
+    // notifications
+    notifications user_notifications[]
+
+    @@index([active])
+    @@index([username])
+    @@index([region_id])
+    @@index([authorization_profile_id])
+}
+
+model user_notifications {
+    notification_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    title    String? @db.VarChar(255)
+    contents String? @db.Text
+    read     Boolean @default(false)
+
+    user_id Int   @db.UnsignedInt
+    user    users @relation(fields: [user_id], references: [user_id], onUpdate: Cascade, onDelete: Cascade)
+
+    notification_resource_id Int?                     @db.UnsignedInt
+    notification_resource    notifications_resources? @relation("notification_instance_resource", references: [resource_id], fields: [notification_resource_id])
+
+    tags users_notifications_tags[] @relation("notification_tags")
+
+    @@index([user_id])
+}
+
+model notifications_resources {
+    resource_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    title    String                     @db.VarChar(255)
+    contents String                     @db.Text
+    tags     users_notifications_tags[] @relation("notification_resource_tags")
+
+    users_notifications user_notifications[] @relation("notification_instance_resource")
+}
+
+model users_notifications_tags {
+    relation_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    tag_id Int?                @db.UnsignedInt
+    tag    notifications_tags? @relation("users_notifications", references: [tag_id], fields: [tag_id])
+
+    notification_id Int?                @db.UnsignedInt
+    notification    user_notifications? @relation("notification_tags", references: [notification_id], fields: [notification_id])
+
+    notification_resource_id Int?                     @db.UnsignedInt
+    notification_resource    notifications_resources? @relation("notification_resource_tags", references: [resource_id], fields: [notification_resource_id])
+
+    @@index([notification_id])
+    @@index([notification_resource_id])
+    @@index([tag_id])
+}
+
+model notifications_tags {
+    tag_id Int     @id @default(autoincrement()) @db.UnsignedInt
+    color  String?
+
+    label String?
+
+    users_notifications users_notifications_tags[] @relation("users_notifications")
+}
+
+model users_verification_otps {
+    otp_id Int     @id @default(autoincrement()) @db.UnsignedInt
+    value  String
+    color  String?
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("user_verification_otp", references: [user_id], fields: [user_id])
+
+    reason String?
+
+    @@index([user_id])
+}
+
+enum user_phone_otp_kind {
+    verification
+    password_reset
+}
+
+model users_phone_verification_otps {
+    otp_id Int                 @id @default(autoincrement()) @db.UnsignedInt
+    value  String
+    kind   user_phone_otp_kind
+
+    last_sent_date   DateTime
+    timing_threshold Int
+
+    user_id Int    @db.UnsignedInt
+    user    users? @relation("user_phone_verification_otp", references: [user_id], fields: [user_id])
+
+    @@index([user_id])
+}
+
+model users_authorities {
+    authority_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    key_name String
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("user_authorities", references: [user_id], fields: [user_id])
+
+    all Boolean @default(true)
+
+    dynamic_authorities users_dynamic_authorities[] @relation("dynamic_authorities")
+
+    @@index([key_name])
+    @@index([user_id])
+}
+
+model users_dynamic_authorities {
+    dynamic_authority_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    dynamic_authority_key String
+
+    all Boolean @default(true)
+
+    authority_id Int?               @db.UnsignedInt
+    authority    users_authorities? @relation("dynamic_authorities", references: [authority_id], fields: [authority_id])
+
+    dynamic_authority_values users_dynamic_authorities_values[] @relation("dynamic_authority_values")
+
+    @@index([dynamic_authority_key])
+    @@index([authority_id])
+}
+
+model users_dynamic_authorities_values {
+    value_id Int    @id @default(autoincrement()) @db.UnsignedInt
+    value    String
+
+    dynamic_authority_id Int?                       @db.UnsignedInt
+    dynamic_authority    users_dynamic_authorities? @relation("dynamic_authority_values", references: [dynamic_authority_id], fields: [dynamic_authority_id])
+
+    @@index([dynamic_authority_id])
+}
+
+model authorization_profiles {
+    profile_id  Int     @id @default(autoincrement()) @db.UnsignedInt
+    name        String
+    description String? @db.Text
+
+    default_home_page_name String?
+
+    profile_authorities profiles_authorities[] @relation("authorization_profiles_authorities")
+
+    users                users[]                @relation("authorization_profile_users")
+}
+
+model profiles_authorities {
+    authority_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    key_name String
+
+    profile_id Int?                    @db.UnsignedInt
+    profile    authorization_profiles? @relation("authorization_profiles_authorities", references: [profile_id], fields: [profile_id])
+
+    all Boolean @default(true)
+
+    dynamic_authorities profiles_dynamic_authorities[] @relation("dynamic_authorities")
+
+    @@index([key_name])
+    @@index([profile_id])
+}
+
+model profiles_dynamic_authorities {
+    dynamic_authority_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    dynamic_authority_key String
+
+    all Boolean @default(true)
+
+    authority_id Int?                  @db.UnsignedInt
+    authority    profiles_authorities? @relation("dynamic_authorities", references: [authority_id], fields: [authority_id])
+
+    dynamic_authority_values profiles_dynamic_authorities_values[] @relation("dynamic_authority_values")
+
+    @@index([dynamic_authority_key])
+    @@index([authority_id])
+}
+
+model profiles_dynamic_authorities_values {
+    value_id Int    @id @default(autoincrement()) @db.UnsignedInt
+    value    String
+
+    dynamic_authority_id Int?                          @db.UnsignedInt
+    dynamic_authority    profiles_dynamic_authorities? @relation("dynamic_authority_values", references: [dynamic_authority_id], fields: [dynamic_authority_id])
+
+    @@index([dynamic_authority_id])
+}
+
+model users_logs {
+    log_id Int @id @default(autoincrement()) @db.UnsignedInt
+
+    user_id Int?   @db.UnsignedInt
+    user    users? @relation("user_logs", references: [user_id], fields: [user_id])
+
+    summary       String? @db.Text
+    title_display String?
+    title         String?
+
+    // model that relates to the log 
+    model     String?
+    model_key String?
+    model_id  Int?    @db.UnsignedInt
+
+    variables String? @db.Text
+
+    @@index([user_id])
+}
+
+// basic functioning -- user -- authorities
+
+// basic functioning -- addressing
+
+model countries {
+    country_id  Int     @id @default(autoincrement()) @db.UnsignedInt
+    name        String  @db.VarChar(255)
+    description String? @db.Text
+
+    cities                 cities[]
+}
+
+model cities {
+    city_id     Int     @id @default(autoincrement()) @db.UnsignedInt
+    country_id  Int     @db.UnsignedInt
+    name        String  @db.VarChar(255)
+    description String? @db.Text
+
+    country countries @relation(fields: [country_id], references: [country_id], onDelete: NoAction, onUpdate: NoAction, map: "cities_ibfk_1")
+
+    regions              regions[]
+
+    @@index([country_id], map: "country_id")
+}
+
+model regions {
+    region_id Int    @id @default(autoincrement()) @db.UnsignedInt
+    city_id   Int    @db.UnsignedInt
+    name      String @db.VarChar(255)
+
+    city  cities  @relation(fields: [city_id], references: [city_id], onDelete: NoAction, onUpdate: NoAction, map: "regions_ibfk_1")
+    users users[] @relation("regionTousers_regions")
+
+
+    @@index([city_id], map: "city_id")
+}
